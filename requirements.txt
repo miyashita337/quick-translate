@@ -1,0 +1,11 @@
+# Core translation
+deep-translator>=1.11.4    # Google Translate (free, no API key)
+deepl>=1.16.0              # DeepL API (optional, needs API key)
+
+# System tray
+pystray>=0.19.5
+Pillow>=10.0.0
+
+# Global hotkeys & automation
+keyboard>=0.13.5
+pyautogui>=0.9.54
