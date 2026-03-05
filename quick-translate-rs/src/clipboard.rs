@@ -22,6 +22,7 @@ const KEYEVENTF_KEYUP: u32 = 0x0002;
 const VK_CONTROL: u8 = 0x11;
 const VK_C: u8 = 0x43;
 const VK_INSERT: u8 = 0x2D;
+const VK_ESCAPE: u8 = 0x1B;
 const VK_MENU: u8 = 0x12;    // Alt (generic)
 const VK_LMENU: u8 = 0xA4;   // 左 Alt
 const VK_RMENU: u8 = 0xA5;   // 右 Alt
@@ -79,8 +80,20 @@ fn wait_for_modifiers_release() {
 /// 管理者権限で動作しているウィンドウへの入力は失敗する場合がある。
 #[cfg(windows)]
 pub fn simulate_copy() {
+    let alt_was_pressed = is_key_pressed(VK_MENU as i32)
+        || is_key_pressed(VK_LMENU as i32)
+        || is_key_pressed(VK_RMENU as i32);
+
     // まず物理的にキーが離されるのを待つ
     wait_for_modifiers_release();
+
+    // Alt 系ホットキー直後はアプリ側がメニュー状態になることがあるため、
+    // Esc でフォーカス状態を戻してからコピーを送る。
+    if alt_was_pressed {
+        let _ = send_key(VK_ESCAPE);
+        thread::sleep(Duration::from_millis(30));
+    }
+
     let _ = send_ctrl_combo(VK_C);
 }
 
@@ -294,6 +307,54 @@ fn send_ctrl_combo(key: u8) -> bool {
 
 #[cfg(not(windows))]
 fn send_ctrl_combo(_key: u8) -> bool {
+    false
+}
+
+#[cfg(windows)]
+fn send_key(key: u8) -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+    };
+
+    unsafe {
+        let mut inputs = [
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: key as u16,
+                        wScan: 0,
+                        dwFlags: 0,
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: key as u16,
+                        wScan: 0,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+        ];
+
+        let sent = SendInput(
+            inputs.len() as u32,
+            inputs.as_mut_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
+        sent == inputs.len() as u32
+    }
+}
+
+#[cfg(not(windows))]
+fn send_key(_key: u8) -> bool {
     false
 }
 
